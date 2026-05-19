@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Unified-Systems</title>
+  <script>document.documentElement.classList.add('js')</script>
   <style>
     /* Tufte rule: no pure #fff / #000. Off-white field, ink-slate text. */
     :root {
@@ -58,6 +59,16 @@
       margin: 0 .15em;
       border-radius: 1px;
     }
+
+    /* Cascade-reveal: ported from tap_viz cascade-reveal.js (200ms layer
+       delay, 300ms ease-out). When JS is running, the wordmark starts
+       hidden and fades in once the grid has settled. Without JS, the
+       words show immediately. Honours reduced-motion. */
+    .js #wordmark           { opacity: 0; transition: opacity 300ms ease-out; }
+    .js #wordmark.reveal    { opacity: 1; }
+    @media (prefers-reduced-motion: reduce) {
+      .js #wordmark         { opacity: 1; transition: none; }
+    }
   </style>
 </head>
 <body>
@@ -92,6 +103,7 @@
           'background-color': c('--bg'),
           'background-opacity': 1,
           'border-width': 0,
+          'opacity': 0,        /* fades in via cascade-reveal */
           'label': '',
         },
       }],
@@ -145,8 +157,21 @@
     cy.panningEnabled(false);
     cy.autolock(true);
 
-    // Re-fit once fonts are ready (mono fallback can mis-measure first paint).
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(pin);
+    // Cascade-reveal (ported from tap_viz/runtime/cascade-reveal.js):
+    // hold the node + wordmark at opacity 0, give the grid a beat to
+    // land, then fade them in together. Same timing as the genericom
+    // cascade-reveal — 200ms layer delay, 300ms ease-out.
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const REVEAL_DELAY = reduce ? 0 : 200;
+    const FADE_MS      = reduce ? 0 : 300;
+    const wm = document.getElementById('wordmark');
+    function reveal() {
+      node.animate({ style: { opacity: 1 } }, { duration: FADE_MS, easing: 'ease-out' });
+      wm.classList.add('reveal');
+    }
+    function ready() { pin(); setTimeout(reveal, REVEAL_DELAY); }
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(ready);
+    else ready();
 
     let raf;
     addEventListener('resize', () => {
