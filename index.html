@@ -5,21 +5,154 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Unified-Systems</title>
   <style>
-    html, body {
-      height: 100%;
-      margin: 0;
+    /* Tufte rule: no pure #fff / #000. Off-white field, ink-slate text. */
+    :root {
+      --bg:     #f6f4ef;  /* warm off-white page + node "clearing"     */
+      --grid:   #cbd5e1;  /* authentic tap_viz grid-guide colour       */
+      --ink:    #1f2630;  /* dark slate ink (never #000)               */
+      --accent: #6fa6bd;  /* the one colour: the edge / the dash       */
+      --dash-w: .525em;   /* the edge's length — single tuning knob    */
     }
-    body {
+
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    body { background: var(--bg); }
+
+    #cy {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      cursor: default;
+    }
+
+    /* The wordmark: a custom HTML element pinned to the locked node —
+       the same hack tap_viz uses (HTML positioned to a node), reduced to
+       its simplest form because the node never moves. */
+    #wordmark {
+      position: fixed;
+      inset: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #ffffff;
-      color: #000000;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      pointer-events: none;
+      user-select: none;
+      z-index: 2;
+      font-family: ui-monospace, "SF Mono", SFMono-Regular,
+                   "JetBrains Mono", Menlo, Consolas, monospace;
+      font-size: clamp(1.35rem, 4vw, 2.5rem);
+      font-weight: 500;
+      color: var(--ink);
+    }
+    #mark {
+      display: inline-block;
+      white-space: nowrap;
+      letter-spacing: .13em;
+    }
+    /* The dash is not a glyph — it's a drawn edge segment in the one
+       accent colour. Length tunable via --dash-w. */
+    #mark .edge {
+      display: inline-block;
+      width: var(--dash-w);
+      height: 3px;
+      background: var(--accent);
+      vertical-align: middle;
+      margin: 0 .15em;
+      border-radius: 1px;
     }
   </style>
 </head>
 <body>
-  Unified-Systems
+  <div id="cy"></div>
+  <div id="wordmark"><span id="mark">Unified<i class="edge"></i>Systems</span></div>
+
+  <script src="vendor/cytoscape.min.js"></script>
+  <script src="vendor/cytoscape-grid-guide.js"></script>
+  <script>
+    const styles = getComputedStyle(document.documentElement);
+    const c = n => styles.getPropertyValue(n).trim();
+
+    // grid-guide auto-registers when loaded after cytoscape (as in tap_viz);
+    // also try explicit registration in case this build needs it.
+    try {
+      if (window.cytoscapeGridGuide && cytoscape.use) cytoscape.use(window.cytoscapeGridGuide);
+    } catch (_) { /* already registered */ }
+
+    // One node, dead centre. Filled with the page colour: invisible except
+    // that it interrupts the gridlines where it sits — the only tell that
+    // this is a live graph, not a picture. node zero of the grid.
+    const cy = cytoscape({
+      container: document.getElementById('cy'),
+      elements: [{ data: { id: 'us' }, position: { x: 0, y: 0 } }],
+      layout: { name: 'preset' },
+      style: [{
+        selector: 'node',
+        style: {
+          'shape': 'round-rectangle',
+          'width': 240,   /* placeholder — fitNode() sizes it to the word */
+          'height': 80,
+          'background-color': c('--bg'),
+          'background-opacity': 1,
+          'border-width': 0,
+          'label': '',
+        },
+      }],
+      userZoomingEnabled: false,
+      userPanningEnabled: false,
+      boxSelectionEnabled: false,
+      autoungrabify: true,
+      autounselectify: true,
+    });
+
+    if (cy.gridGuide) cy.gridGuide({
+      drawGrid: true,
+      gridSpacing: 40,
+      gridColor: c('--grid'),
+      lineWidth: 1.0,
+      gridStackOrder: -1,
+      snapToGridOnRelease: false,
+      snapToGridDuringDrag: false,
+      distributionGuidelines: false,
+      geometricGuideline: false,
+      resize: false,
+      parentPadding: false,
+      zoomDash: true,
+      panGrid: true,
+    });
+
+    // Size the node snug to the wordmark — minimal breathing room, no
+    // grid-snapping. The system is spare: exactly what the text needs and
+    // not a unit more. Re-fit on resize (font scales with vw).
+    const node = cy.$('#us');
+    const mark = document.getElementById('mark');
+    function fitNode() {
+      const r = mark.getBoundingClientRect();   // zoom locked at 1:1
+      node.style({
+        width:  Math.round(r.width  + 24),      // ~12px each side
+        height: Math.round(r.height + 16),      // ~8px each side
+      });
+    }
+
+    // Lock it dead-centre. Fix zoom at 1:1 (so 40px cells == tap_viz),
+    // size + centre the node, then disable every interaction. Re-centre
+    // on resize only (pan, not user motion) so it stays pinned to the
+    // wordmark. Nothing else moves — it should feel like a page.
+    function pin() {
+      cy.zoom(1);
+      fitNode();
+      cy.center();
+    }
+    pin();
+    cy.zoomingEnabled(false);
+    cy.panningEnabled(false);
+    cy.autolock(true);
+
+    // Re-fit once fonts are ready (mono fallback can mis-measure first paint).
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(pin);
+
+    let raf;
+    addEventListener('resize', () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => { cy.resize(); pin(); });
+    });
+  </script>
 </body>
 </html>
